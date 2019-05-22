@@ -1,11 +1,9 @@
 module m_getcaseid
 contains
-subroutine getcaseid(caseid,esmethod,alphageo,nmda,esamp,gradient,beta,sigw,it)
+subroutine getcaseid(caseid,esmethod,alphageo,nmda,esamp,sigw,it)
    character(len=*), intent(in) :: esmethod
    real, intent(in)    :: alphageo
-   real, intent(in)    :: beta
    real, intent(in)    :: sigw
-   integer, intent(in) :: gradient
    integer, intent(in) :: nmda
    integer, intent(in) :: esamp
    integer, intent(in) :: it
@@ -14,10 +12,8 @@ subroutine getcaseid(caseid,esmethod,alphageo,nmda,esamp,gradient,beta,sigw,it)
    character(len=3) calphageo
    character(len=3) cnmda
    character(len=3) csamp
-   character(len=3) zgrad
    character(len=3) csigw
    character(len=1) cenks
-   character(len=2) ln
    character(len=2) cit
  
    write(calphageo,'(f3.1)')alphageo
@@ -34,21 +30,6 @@ subroutine getcaseid(caseid,esmethod,alphageo,nmda,esamp,gradient,beta,sigw,it)
    else
       write(csamp(1:2),'(i2.2)')esamp
    endif
-
-   if (beta == 0.0) then
-      ln(1:2)='_L'
-      ln(1:2)=' '
-   else
-      ln(1:2)=' '
-   endif
-
-   if (gradient == 0) then
-      zgrad(1:3)='ANA'
-   else
-      zgrad(1:3)='ENS'
-   endif
-
-!!!   csigw(1:3)=zgrad(1:3)
 
    caseid(:)=' '
 

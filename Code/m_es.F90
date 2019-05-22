@@ -1,4 +1,5 @@
 module m_es
+use mod_inistat
 use mod_xyqgrid
 use m_cyyreg
 use m_cov
@@ -9,24 +10,14 @@ use m_tecmargpdf
 use m_tecpdf
 implicit none
 contains
-subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp,              &
-              beta,funcmode,nmda,alphageo,cdd,d,lcyyreg,sigw,sigq)
+subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp, cdd)
    integer, intent(in)  :: nrsamp
    integer, intent(in)  :: esamp
-   integer, intent(in)  :: nmda
    real,    intent(out) :: samples(nrsamp,2)
    real,    intent(in)  :: xsampini(nrsamp) 
    real,    intent(in)  :: qsampini(nrsamp) 
    real,    intent(in)  :: dpert(nrsamp) 
-
-   real, intent(in) :: alphageo
-   real, intent(in) :: beta
-   real, intent(in) :: d
-   real, intent(in) :: cdd
-   real, intent(in) :: sigw,sigq
-
-   logical, intent(in) :: lcyyreg
-   integer, intent(in) :: funcmode
+   real,    intent(in) :: cdd
 
    real, allocatable :: xsamp(:)
    real, allocatable :: qsamp(:)
@@ -34,7 +25,6 @@ subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp,              &
 
    integer n,i
    real Cxx,Cyy,Cqq,Cyx,Cqy,Cqx,alphasum
-   integer :: gradient=0
    real pert
    character(len=40) caseid
 
@@ -47,7 +37,7 @@ subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp,              &
    do i=1,nrsamp
       xsamp(i)=xsampini(i)
       qsamp(i)=qsampini(i)
-      ysamp(i)=func(xsamp(i),beta,funcmode)+qsamp(i)
+      ysamp(i)=func(xsamp(i))+qsamp(i)
    enddo
 
    call cov(Cxx,Cyy,Cqq,Cyx,Cqy,Cqx,xsamp,ysamp,qsamp,nrsamp)
@@ -62,7 +52,7 @@ subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp,              &
 !      if (updatemode==0) then
 !         ysamp(i)=ysamp(i)+ (cyy/(cyy+cdd))*(dpert(i)-ysamp(i))
 !      else
-         ysamp(i)=func(xsamp(i),beta,funcmode) + qsamp(i)
+         ysamp(i)=func(xsamp(i)) + qsamp(i)
 !      endif
 
    enddo
@@ -73,7 +63,7 @@ subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp,              &
          ysamp(i)=ysamp(i)+sigq*normal()
       enddo
    endif
-   call getcaseid(caseid,'ES',alphageo,nmda,esamp,gradient,beta,sigw,0)
+   call getcaseid(caseid,'ES',-1.0,-1,esamp,sigw,0)
    call tecpdf(x,y,nx,ny,xsamp,ysamp,nrsamp,xa,ya,dx,dy,caseid)
    call tecmargpdf('x',xsamp,nrsamp,caseid,xa,xb,nx)
    call tecmargpdf('y',ysamp,nrsamp,caseid,ya,yb,ny)

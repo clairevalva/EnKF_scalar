@@ -1,4 +1,5 @@
 module m_esmda
+use mod_inistat
 use m_cyyreg
 use m_cov
 use m_getcaseid
@@ -9,40 +10,32 @@ use m_tecmargpdf
 use m_tecpdf
 use mod_xyqgrid
 implicit none
+logical, save :: lmda           ! Run esmda or not
+integer, save :: nmda           ! number of mda iterations
+real,    save :: alphageo       ! geometrical factor for alpha sequence
 contains
-subroutine esmda(samples,xsampini,qsampini,nrsamp,esamp,&
-                 beta,funcmode,nmda,alphageo,cdd,d,lcyyreg,sigw,sigq)
+subroutine esmda(samples,xsampini,qsampini,nrsamp,esamp,cdd)
    integer, intent(in)  :: nrsamp
    integer, intent(in)  :: esamp
    real,    intent(out) :: samples(nrsamp,2)
    real,    intent(in)  :: xsampini(nrsamp) 
    real,    intent(in)  :: qsampini(nrsamp) 
+   real,    intent(in)  :: cdd
 
-   real, intent(in) :: beta
-   real, intent(in) :: alphageo
-   real, intent(in) :: d
-   real, intent(in) :: cdd
-   real, intent(in) :: sigw,sigq
-
-   logical, intent(in) :: lcyyreg
-   integer, intent(in) :: funcmode
-   integer, intent(in) :: nmda
 
    real, allocatable :: xsamp(:)
    real, allocatable :: qsamp(:)
    real, allocatable :: ysamp(:)
-
    real, allocatable :: alpha(:)
+
    integer n,i
    real Cxx,Cyy,Cqq,Cyx,Cqy,Cqx,alphasum
-   integer :: gradient=0
    real pert
    character(len=40) caseid
 
    allocate(xsamp(nrsamp))
    allocate(qsamp(nrsamp))
    allocate(ysamp(nrsamp))
-
    allocate(alpha(nmda))
 
    write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
@@ -50,7 +43,7 @@ subroutine esmda(samples,xsampini,qsampini,nrsamp,esamp,&
    do i=1,nrsamp
       xsamp(i)=xsampini(i)
       qsamp(i)=qsampini(i)
-      ysamp(i)=func(xsamp(i),beta,funcmode)+qsamp(i)
+      ysamp(i)=func(xsamp(i))+qsamp(i)
    enddo
 
       alphasum=0.0
@@ -67,9 +60,9 @@ subroutine esmda(samples,xsampini,qsampini,nrsamp,esamp,&
             pert=sqrt(alpha(n))*sqrt(cdd)*normal()
             xsamp(i)=xsamp(i) + (Cyx/(Cyy+alpha(n)*Cdd))*(d+pert-ysamp(i))
             qsamp(i)=qsamp(i) + (Cqy/(Cyy+alpha(n)*Cdd))*(d+pert-ysamp(i))
-            ysamp(i)=func(xsamp(i),beta,funcmode)+qsamp(i)
+            ysamp(i)=func(xsamp(i))+qsamp(i)
          enddo
-         call getcaseid(caseid,'MDA',alphageo,nmda,esamp,gradient,beta,sigw,n)
+         call getcaseid(caseid,'MDA',alphageo,nmda,esamp,sigw,n)
          call tecmargpdf('x',xsamp,nrsamp,caseid,xa,xb,nx)
       enddo
 
@@ -81,12 +74,15 @@ subroutine esmda(samples,xsampini,qsampini,nrsamp,esamp,&
             ysamp(i)=ysamp(i)+sigq*normal()
          enddo
       endif
-      call getcaseid(caseid,'MDA',alphageo,nmda,esamp,gradient,beta,sigw,0)
+      call getcaseid(caseid,'MDA',alphageo,nmda,esamp,sigw,0)
       call tecpdf(x,y,nx,ny,xsamp,ysamp,nrsamp,xa,ya,dx,dy,caseid)
       call tecmargpdf('x',xsamp,nrsamp,caseid,xa,xb,nx)
       call tecmargpdf('y',ysamp,nrsamp,caseid,ya,yb,ny)
       call tecmargpdf('q',qsamp,nrsamp,caseid,qa,qb,nx)
       write(*,'(a,f12.4)')'Alphasum=',alphasum
       write(*,'(a)')'ES-MDA analysis completed'
+
+      deallocate(xsamp,ysamp,qsamp,alpha)
+
 end subroutine
 end module
