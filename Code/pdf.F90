@@ -1,4 +1,5 @@
 program iterative_smoothers
+   use mod_xyqgrid
    use m_marginalpdf
    use m_set_random_seed2
    use m_moments
@@ -7,6 +8,9 @@ program iterative_smoothers
    use m_steinkern
    use m_cyyreg
    use m_aaprojection
+   use m_iniens
+   use m_es
+   use m_esmda
    use m_costf
    use m_getalpha
    use m_tecpdf
@@ -24,20 +28,17 @@ program iterative_smoothers
    use m_cov
    use m_integrals
    implicit none
-!   integer, parameter :: nrsamp=10000000
-   integer nrsamp,esamp,nx,ny
+   integer nrsamp,esamp
    integer maxiesit   ! 20 
    real gamma_ies    ! step length factor used in IES (gamma_ies=0.5)
    real ave,var
 
+   logical :: lies=.true.  ! Run IES or not
+   logical :: lmda=.true.  ! Run MDA or not
+   logical :: lienks=.true.  ! Run IEnKS or not
+   logical :: lenstein=.true.  ! Run EnStein or not
    character(len=7) :: method(0:4)=['ES     ','IES    ','IEnKF  ', 'ESMDA  ', 'EnSTEIN']
    character(len=1) :: variable(1:2)=['x','q']
-
-   real, allocatable, dimension(:) :: avex,adevx,sdevx,varx,skewx,kurtx
-   real, allocatable, dimension(:) :: avey,adevy,sdevy,vary,skewy,kurty
-
-   real, allocatable, dimension(:) :: avexIES,varxIES,skewxIES,kurtxIES
-   real, allocatable, dimension(:) :: aveyIES,varyIES,skewyIES,kurtyIES
 
    real, allocatable :: kern(:,:)
 
@@ -51,17 +52,13 @@ program iterative_smoothers
    real xm      ! half grid domain
    real sft     ! shift in y-direction
    integer funcmode ! which function to use
-   integer updatemode ! Update y by ES (0) or evaluate (1)
+   integer updatemode ! Update y by ES (0) or evaluate (1)   NOT USED
    integer nmda ! number of mda iterations
-   logical :: lies=.true.  ! Run IES or not
-   logical :: lmda=.true.  ! Run MDA or not
-   logical :: lienks=.true.  ! Run IEnKS or not
-   logical :: lenstein=.false.  ! Run EnStein or not
    integer gradient
    integer IESv
 
 !   real x,mode1,mode0,mean1,mean0
-   real dx,dy,sump,dq,fac,tmp
+   real sump,fac,tmp
    real grad1,grad2(2)
    real cxx,cyy,cqq,cyx,cqy,cqx,alphasum
    real pxx,Pyy,pqq,pyx,pqy,pqx,Pyymat(1,1)
@@ -80,15 +77,6 @@ program iterative_smoothers
 
    logical lmoderr, testpseudo
 
-   real, allocatable :: x(:)       ! x-locations
-   real, allocatable :: y(:)       ! y-locations
-   real, allocatable :: q(:)       ! y-locations
-   real, allocatable :: margx(:)   ! x-locations
-   real, allocatable :: margy(:)   ! y-locations
-   real, allocatable :: datum(:)   ! datum pdf
-   real, allocatable :: prior(:)   ! prior pdf
-   real, allocatable :: pdf(:,:)
-   real, allocatable :: cost(:)
 
    real, allocatable :: xsamp(:),xsampini(:) 
    real, allocatable :: ysamp(:),ysampini(:)
@@ -109,7 +97,7 @@ program iterative_smoothers
    real dgx,dgq
    real aveA
 
-   real :: xa,xb,ya,yb,qa,qb ,C(1,1)
+   real :: C(1,1)
    real :: sigq= 0.05
 
    integer :: nrits=100
@@ -124,9 +112,6 @@ program iterative_smoothers
    real, allocatable :: Yi(:,:)   ! predicted measurements 
    real, allocatable :: YY(:,:)  ! predicted measurement anomalies 
    real, allocatable :: S(:,:)   ! predicted measurement anomalies Y times W^+
-   real, allocatable :: S1(:,:)   ! predicted measurement anomalies Y times W^+
-   real, allocatable :: S2(:,:)   ! predicted measurement anomalies Y times W^+
-   real, allocatable :: S3(:,:)   ! predicted measurement anomalies Y times W^+
    real, allocatable :: YT(:,:),ST(:,:),STO(:,:)
    real, allocatable :: Dens(:,:)   ! Ensemble of perturbed measurements
    real, allocatable :: H(:,:)     ! "Innovation "
@@ -163,8 +148,8 @@ program iterative_smoothers
 
    open(10,file='infile.in')
       read(10,*)esamp       ; print '(a,i4,i12)',   'number  of samples 10^x    :',esamp,10**esamp
-      read(10,*)nx          ; print '(a,i4)',       'x-dimension of grid  (nx)  :',nx
-      read(10,*)ny          ; print '(a,i4)',       'y-dimension of grid  (ny)  :',ny
+      read(10,*)i           ; print '(a,i4)',       'x-dimension of grid  (nx)  :',nx
+      read(10,*)i           ; print '(a,i4)',       'y-dimension of grid  (ny)  :',ny
       read(10,*)xa          ; print '(a,f10.3)',    'xa                         :',xa
       read(10,*)xb          ; print '(a,f10.3)',    'xb                         :',xb
       read(10,*)ya          ; print '(a,f10.3)',    'ya                         :',ya
@@ -178,7 +163,7 @@ program iterative_smoothers
       read(10,*)rh          ; print '(a,f10.3)',    'model parameter rh         :',rh
       read(10,*)beta        ; print '(a,f10.3)',    'model parameter beta       :',beta
       read(10,*)funcmode    ; print '(a,tr7,i3)',   'function to use            :',funcmode
-      read(10,*)updatemode  ; print '(a,tr7,i3)',   'update of y(0), func(1)    :',updatemode  
+      read(10,*)updatemode  ; print '(a,tr7,i3)',   'update of y(0), func(1)    :',updatemode               ! Not used
       read(10,*)lcyyreg     ; print '(a,tr10,l1)',  'Regression for Cyy         :',lcyyreg
       read(10,*)lmda        ; print '(a,tr10,l1)',  'Run MDA                    :',lmda
       read(10,*)nmda        ; print '(a,tr7,i3)',   'number of mda iterations   :',nmda
@@ -211,29 +196,14 @@ program iterative_smoothers
    allocate(ysamp(nrsamp),ysampini(nrsamp))
    allocate(iconv(nrsamp)) 
 
-   allocate(x(nx), y(ny), q(nx))
-   allocate(margx(nx), margy(ny))
-   allocate(datum(ny))
-   allocate(prior(nx))
-   allocate(pdf(nx,ny))
-   allocate(cost(nx))
 
    allocate(alpha(nmda))
-   allocate(avex(0:nmda),adevx(0:nmda),sdevx(0:nmda),varx(0:nmda),skewx(0:nmda),kurtx(0:nmda))
-   allocate(avey(0:nmda),adevy(0:nmda),sdevy(0:nmda),vary(0:nmda),skewy(0:nmda),kurty(0:nmda))
-
-   allocate(avexIES(0:maxiesit),varxIES(0:maxiesit),skewxIES(0:maxiesit),kurtxIES(0:maxiesit))
-   allocate(aveyIES(0:maxiesit),varyIES(0:maxiesit),skewyIES(0:maxiesit),kurtyIES(0:maxiesit))
-
    allocate(xx(nrsamp),bb(nrsamp), xxold(nrsamp))
    allocate (ipiv(nrsamp))
    allocate (Yi(1,nrsamp))
    allocate (YY(1,nrsamp))
    allocate (YAinv(1,ndim))
    allocate (S(1,nrsamp))
-   allocate (S1(1,nrsamp))
-   allocate (S2(1,nrsamp))
-   allocate (S3(1,nrsamp))
    allocate (YT(nrsamp,1),ST(nrsamp,1),STO(nrsamp,1))
    allocate (Dens(1,nrsamp))
    allocate (H(1,nrsamp))
@@ -249,26 +219,10 @@ program iterative_smoothers
    call integrals(x0,d,siga,sigo,beta,funcmode,maxiesit)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Grid domain and dx
+! Grid domain for plotting pdfs in x, q, and y
    qa=-5.0*max(sigq,sigw)
    qb= 5.0*max(sigq,sigw)
-
-   dx=(xb-xa)/real(nx-1); print '(a,f12.5)','dx=',dx
-   dy=(yb-ya)/real(ny-1); print '(a,f12.5)','dy=',dy
-   dq=(qb-qa)/real(nx-1); print '(a,f12.5)','dq=',dq
-
-   do i=1,nx
-      x(i)=xa + real(i-1)*dx
-   enddo
-
-   do j=1,ny
-      y(j)=ya + real(j-1)*dy
-   enddo
-
-   do i=1,nx
-      q(i)=qa + real(i-1)*dq
-   enddo
-
+   call xyqgrid(x,y,q)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Definition of the strong constraint cost function
@@ -289,9 +243,6 @@ program iterative_smoothers
    sump=sum(datum(:))*dy
    datum=datum/sump
    call tecfunc('datum',datum,y,ny,'y','Datum')
-
-
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Definition of the analytical joint unconditional pdf
@@ -320,8 +271,6 @@ program iterative_smoothers
    enddo
    sump=sum(pdf(:,:))*dx*dy
    pdf=pdf/sump
-
-
    call getcaseid(caseid,'PDFC',alphageo,nmda,esamp,gradient,beta,sigw,0)
    call tecjointpdf(pdf,x,y,nx,ny,caseid)
    call marginalpdf(pdf,margx,margy,nx,ny,x,y,dx,dy)
@@ -331,7 +280,7 @@ program iterative_smoothers
    do j=1,ny
       if (sigw==0.0) then
          margx(i)=margx(i)+exp(-0.5*(x(i)-x0 )**2/siga**2                   &
-                               -0.5*(d-func(x(i),beta,funcmode)-q(j))**2/cdd**2)
+                               -0.5*(d-func(x(i),beta,funcmode))**2/cdd**2)
       else 
          margx(i)=margx(i)+exp(-0.5*(x(i)-x0 )**2/siga**2                   &
                                -0.5*(q(j)-0.0)**2/max(sigw,0.0001)**2  & 
@@ -344,160 +293,55 @@ program iterative_smoothers
    call tecfunc('margy',margy,y,ny,'y',caseid)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Ensemble generation, prediction, ensemble joint pdf
-   do i=1,nrsamp
-      xsampini(i)=siga*normal()
-   enddo
-   call moments(xsampini,nrsamp,avex(0),adevx(0),sdevx(0),varx(0),skewx(0),kurtx(0))
-   do i=1,nrsamp
-      xsampini(i)=xsampini(i)-avex(0)
-   enddo
-
-   do i=1,nrsamp
-      qsampini(i)=sigw*normal()
-   enddo
-   call moments(qsampini,nrsamp,avex(0),adevx(0),sdevx(0),varx(0),skewx(0),kurtx(0))
-   do i=1,nrsamp
-      qsampini(i)=qsampini(i)-avex(0)
-   enddo
-
-   do i=1,nrsamp
-      xsampini(i)=x0+xsampini(i)
-      ysampini(i)=func(xsampini(i),beta,funcmode) + qsampini(i)
-   enddo
-
-   do i=1,nrsamp
-      dpert(i)=d+sqrt(cdd)*normal()
-   enddo
-   print *,'Sampling done'
-
-   call getcaseid(caseid,'INI',alphageo,nmda,esamp,gradient,beta,sigw,0)
-   call tecpdf(x,y,nx,ny,xsampini,ysampini,nrsamp,xa,ya,dx,dy,caseid)
-   call tecmargpdf('x',xsampini,nrsamp,caseid,xa,xb,nx)
-   call tecmargpdf('y',ysampini,nrsamp,caseid,ya,yb,ny)
-   call tecmargpdf('q',qsampini,nrsamp,caseid,qa,qb,nx)
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! printing the first members cost functions 
-   allocate(costens(nx,10))
-   allocate(costite(10,nrits))
-   allocate(xsampit(10,nrits))
-   do n=1,10
-      do i=1,nx
-         costens(i,n)=(x(i)-xsampini(n))**2/siga**2 + (func(x(i),beta,funcmode)-dpert(n))**2/cdd    
-      enddo
-      xsampit(n,1)=xsampini(n)
-      costite(n,1)= (func(xsampit(n,1),beta,funcmode)-dpert(n))**2/cdd    
-   enddo
-   call teccostens('costens',costens,x,nx,10,'x')
+! Ensemble initialization
+   call iniens(xsampini,qsampini,ysampini,dpert,nrsamp,              &
+                  siga,sigw,x0,beta,funcmode,alphageo,nmda,esamp,d,cdd)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! E S           !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-   write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
-   write(*,'(a)')'ES analysis...'
-   do i=1,nrsamp
-      xsamp(i)=xsampini(i)
-      qsamp(i)=qsampini(i)
-      ysamp(i)=func(xsamp(i),beta,funcmode)+qsamp(i)
-   enddo
+      
+   call es(samples(1:nrsamp,1:2,0),xsampini,qsampini,dpert,nrsamp,esamp,              &
+           beta,funcmode,nmda,alphageo,cdd,d,lcyyreg,sigw,sigq)
 
-   call cov(Cxx,Cyy,Cqq,Cyx,Cqy,Cqx,xsamp,ysamp,qsamp,nrsamp)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Printing the first members cost functions 
+   if (sigw == 0.0) then
+      allocate(costens(nx,10))
+      allocate(costite(10,nrits))
+      allocate(xsampit(10,nrits))
 
-!   write(*,'(a,f10.4)')'Pyy from samples :',Cyy
-   if (lcyyreg) cyy=cyyreg(Cxx,Cqq,Cyx,Cqy,Cqx)
-
-   do i=1,nrsamp
-      xsamp(i)=xsamp(i) + (cyx/(cyy+cdd))*(dpert(i)-ysamp(i))
-      qsamp(i)=qsamp(i) + (cqy/(cyy+cdd))*(dpert(i)-ysamp(i))
-
-      if (updatemode==0) then
-         ysamp(i)=ysamp(i)+ (cyy/(cyy+cdd))*(dpert(i)-ysamp(i))
-      else
-         ysamp(i)=func(xsamp(i),beta,funcmode) + qsamp(i)
-      endif
-
-   enddo
-   write(*,'(a,10g11.3)')'Es',xsamp(1:10)
-
-   if (sigw < sigq) then
-      do i=1,nrsamp
-         ysamp(i)=ysamp(i)+sigq*normal()
+      do n=1,10
+         do i=1,nx
+            costens(i,n)=(x(i)-xsampini(n))**2/siga**2 + (func(x(i),beta,funcmode)-dpert(n))**2/cdd    
+         enddo
+         xsampit(n,1)=xsampini(n)
+         costite(n,1)= (func(xsampit(n,1),beta,funcmode)-dpert(n))**2/cdd    
       enddo
+      call teccostens('costens',costens,x,nx,10,'x')
+
+      do n=1,10
+         costite(n,2)= (xsampit(n,2)-xsampini(n))**2/siga**2 + (func(xsampit(n,2),beta,funcmode)-dpert(n))**2/cdd    
+      enddo
+      call teccostens('costens',costens,x,nx,10,'x')
+      call tecsampini('sampiniES',costite,xsamp,2,10)
    endif
-   call getcaseid(caseid,'ES',alphageo,nmda,esamp,gradient,beta,sigw,0)
-   call tecpdf(x,y,nx,ny,xsamp,ysamp,nrsamp,xa,ya,dx,dy,caseid)
-   call tecmargpdf('x',xsamp,nrsamp,caseid,xa,xb,nx)
-   call tecmargpdf('y',ysamp,nrsamp,caseid,ya,yb,ny)
-   call tecmargpdf('q',qsamp,nrsamp,caseid,qa,qb,nx)
-   write(*,'(a)')'ES analysis completed'
-
-   samples(:,1,0)=xsamp(:)
-   samples(:,2,0)=qsamp(:)
-
-   do n=1,10
-      xsampit(n,2)=xsamp(n)
-      costite(n,2)= (xsampit(n,2)-xsampini(n))**2/siga**2 + (func(xsampit(n,2),beta,funcmode)-dpert(n))**2/cdd    
-   enddo
-   call teccostens('costens',costens,x,nx,10,'x')
-   call tecsampini('sampiniES',costite,xsampit,2,10)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! E S M D A     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    if (lmda) then
-      write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
-      write(*,'(a)')'MDA analysis...'
-      do i=1,nrsamp
-         xsamp(i)=xsampini(i)
-         qsamp(i)=qsampini(i)
-         ysamp(i)=func(xsamp(i),beta,funcmode)+qsamp(i)
-      enddo
-
-      alphasum=0.0
-      do n=1,nmda
-         alpha(n)=getalpha(n,nmda,alphageo)
-         alphasum=alphasum+1.0/alpha(n)
-         print *,'alpha            :',alpha(n)
-         call cov(Cxx,Cyy,Cqq,Cyx,Cqy,Cqx,xsamp,ysamp,qsamp,nrsamp)
-         write(*,'(a,f10.4)')'Cyy from samples :',Cyy
-         if (lcyyreg) cyy=cyyreg(Cxx,Cqq,Cyx,Cqy,Cqx)
-         write(*,'(i3,f10.2,a,2f13.5,e13.5)')n,alpha(n),', cxx= ',cxx,cyx,cqy
-
-         do i=1,nrsamp
-            pert=sqrt(alpha(n))*sqrt(cdd)*normal()
-            xsamp(i)=xsamp(i) + (cyx/(cyy+alpha(n)*cdd))*(d+pert-ysamp(i))
-            qsamp(i)=qsamp(i) + (cqy/(cyy+alpha(n)*cdd))*(d+pert-ysamp(i))
-            ysamp(i)=func(xsamp(i),beta,funcmode)+qsamp(i)
-         enddo
-         call getcaseid(caseid,'MDA',alphageo,nmda,esamp,gradient,beta,sigw,n)
-         call tecmargpdf('x',xsamp,nrsamp,caseid,xa,xb,nx)
-
-      enddo
-
-
-      samples(:,1,3)=xsamp(:)
-      samples(:,2,3)=qsamp(:)
-
-      if (sigw < sigq) then
-         do i=1,nrsamp
-            ysamp(i)=ysamp(i)+sigq*normal()
-         enddo
-      endif
-      call getcaseid(caseid,'MDA',alphageo,nmda,esamp,gradient,beta,sigw,0)
-      call tecpdf(x,y,nx,ny,xsamp,ysamp,nrsamp,xa,ya,dx,dy,caseid)
-      call tecmargpdf('x',xsamp,nrsamp,caseid,xa,xb,nx)
-      call tecmargpdf('y',ysamp,nrsamp,caseid,ya,yb,ny)
-      call tecmargpdf('q',qsamp,nrsamp,caseid,qa,qb,nx)
-      write(*,'(a,f12.4)')'Alphasum=',alphasum
-      write(*,'(a)')'ES-MDA analysis completed'
+      call esmda(samples(1:nrsamp,1:2,3),xsampini,qsampini,nrsamp,esamp,              &
+                 beta,funcmode,nmda,alphageo,cdd,d,lcyyreg,sigw,sigq)
    endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! I E S         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    if (lies) then
+      call ies(samples(1:nrsamp,1:2,1),xsampini,qsampini,nrsamp,esamp,              &
+                 beta,funcmode,nmda,alphageo,cdd,d,lcyyreg,sigw,sigq)
+
    write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
 !    IES update
       write(*,'(a,2f13.5)',advance='yes')'IES analysis...d,sigo=',d,sigo
@@ -703,17 +547,17 @@ program iterative_smoothers
 
          else
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!    Computing S1 = Yi * Ai^+ * A0 (for testing and diagnostics)
+!    Computing S = Yi * Ai^+ * A0 (for testing and diagnostics)
 !            do k=1,ndim
 !               Ai(k,:)=( Ei(k,:) - sum(Ei(k,1:nrsamp))/real(nrsamp) )/n1
 !            enddo
 !            call pseudoinv(Ai,Ainv,ndim,nrsamp,truncation)
 !            call dgemm('N','N',1,ndim,nrsamp,1.0,YY,1,Ainv,nrsamp,0.0,YAinv,1)
-!            call dgemm('N','N',1,nrsamp,ndim,1.0,YAinv,1,A0,ndim,0.0,S1,1)
-!            print '(a,10g16.8)','S1 = YY * Ai^+ * A0     =',S1(1,1:10)
+!            call dgemm('N','N',1,nrsamp,ndim,1.0,YAinv,1,A0,ndim,0.0,S,1)
+!            print '(a,10g16.8)','S = YY * Ai^+ * A0     =',S(1,1:10)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!    Computing S2= Yi * (Ai^+ * Ai) Omega_i^+  
+!    Computing S= Yi * (Ai^+ * Ai) Omega_i^+  
             do n=1,nrsamp
                aveW(n)=sum(W(n,1:nrsamp))/real(nrsamp) 
                WW(n,1:nrsamp)=W(n,1:nrsamp)-aveW(n)
@@ -730,7 +574,7 @@ program iterative_smoothers
                   if (diffx < 0.000000001) exit
                   if (k==1000) print *,'Linear solver not converged'
                enddo
-               S2(m,:)=xx(:)
+               S(m,:)=xx(:)
             enddo
 
 
@@ -744,33 +588,15 @@ program iterative_smoothers
 !            YT=transpose(YY)
 !            call dgesv(nrsamp,1,WW,nrsamp,ipiv,YT,nrsamp,info)
 !            if (info > 0) stop 'dgesv singular'
-!            S2=transpose(YT)
-!            print '(a,10g13.5)','S2c=',S2(1,1:10)
+!            S=transpose(YT)
+!            print '(a,10g13.5)','Sc=',S(1,1:10)
 !           call cpu_time(finish)
 !           print '("Time = ",f6.3," seconds.")',finish-start
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-            print '(a,10g16.8)','S2 = Yi * Omega_i^+     =',S2(1,1:10)
+            print '(a,10g16.8)','S = Yi * Omega_i^+     =',S(1,1:10)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            if (IEnKS_S == 1 ) then
-               S=S1
-            elseif (IEnKS_S == 2 ) then
-               S=S2
-            else
-               stop 'incorrect IEnKS_S'
-            endif               
-
-            open(10,file='ss.dat')
-            write(10,*)'TITLE = "S"'
-            write(10,*)'VARIABLES = "n" "S1=Yi*Ai^+*A0" "S2=Yi*Omega_i^+" "S3=S2*A0^+*A0" "S2-S1" "S3-S2"' 
-            write(10,*)'ZONE T= "Samples" F=POINT, I=',nrsamp
-            do n=1,nrsamp
-               write(10,'(i8,6g17.8)')n,S1(1,n),S2(1,n),S3(1,n),S2(1,n)-S1(1,n),S3(1,n)-S1(1,n)
-            enddo
-            close(10)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
             H(1,:)=Dens(1,:) - Yi(1,:)             
             call dgemm('N','N',1,nrsamp,nrsamp,1.0,S,1,W,nrsamp,1.0,H,1)
          endif
