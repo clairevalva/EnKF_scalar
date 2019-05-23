@@ -57,7 +57,7 @@ program iterative_smoothers
    character(len=2) ca
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    call set_random_seed2()
-   print '(a,g13.5)','Normal number', normal()
+   print *,'Normal number', normal()
 
    open(10,file='infile.in')
       read(10,*)esamp       ; print '(a,i4,i12)',   'number  of samples 10^x    :',esamp,10**esamp

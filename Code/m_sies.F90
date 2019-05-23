@@ -99,16 +99,14 @@ contains
          E0(2,n)=qf(n)
          Yi(1,n)=Yi(1,n)+E0(2,n)
       endif
-      if (ndim .gt. 2) then
-         do i=3,ndim
-            E0(i,n)=normal()
-         enddo
-      endif
    enddo
    n1=sqrt(real(nrsamp-1))
    do i=1,ndim
       A0(i,:)=( E0(i,:) - sum(E0(i,1:nrsamp))/real(nrsamp) )/n1
    enddo
+
+   print '(a,8f12.4)','master E0: ',E0(1:8,1)
+   print '(a,8f12.4)','master A: ',A0(1:8,1)
 
    Ei=E0
    W=0.0
@@ -136,6 +134,8 @@ contains
 !      print '(a,i3)','Iteration: ',i
       YY(1,:)=(Yi(1,:) - sum(Yi(1,1:nrsamp))/real(nrsamp)) / n1
 
+         print '(a,8f12.4)','master YY: ',YY(1,1:8)
+
       if (ndim < nrsamp-1 .and. beta /= 0.0 .and. lcyyreg) then
          print *,'Activating AAi projection for Y'
          allocate (AAi(nrsamp,nrsamp))
@@ -150,6 +150,7 @@ contains
       if (i == 1) then
          H(1,:)=Dens(1,:) - Yi(1,:)             
          S=YY
+            print '(a,8f12.4)','master H: ',H(1,1:8)
 
       else
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -182,6 +183,7 @@ contains
             enddo
             S(m,:)=xx(:)
          enddo
+            print '(a,8f12.4)','master S: ',S(1,1:8)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !    Standard LU with multiple rhs
@@ -204,6 +206,7 @@ contains
          H(1,:)=Dens(1,:) - Yi(1,:)             
          call dgemm('N','N',1,nrsamp,nrsamp,1.0,S,1,W,nrsamp,1.0,H,1)
       endif
+         print '(a,8f12.4)','master W: ',W(5,1:8)
 
 
 
