@@ -8,13 +8,12 @@ implicit none
 integer, parameter :: nrits=99
 
 contains
-subroutine printcostf(xsampini,xsamp,dpert,nrsamp,cdd)
+subroutine printcostf(xsampini,xsamp,dpert,nrsamp)
 ! Printing the first member's cost functions 
    integer, intent(in) :: nrsamp
    real, intent(in) :: xsampini(nrsamp)
    real, intent(in) :: xsamp(nrsamp)
    real, intent(in) :: dpert(nrsamp)
-   real, intent(in) :: cdd
 
    real, allocatable :: costens(:,:)
    real, allocatable :: costite(:,:)

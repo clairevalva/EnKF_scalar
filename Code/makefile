@@ -14,8 +14,8 @@ OPT_FFLAGS = -c -fdefault-real-8
 
 PAR = 
 DEBUG_FFLAGS = -c -g -fdefault-real-8
-FFLAGS =  $(DEBUG_FFLAGS)
 FFLAGS =  $(OPT_FFLAGS)
+FFLAGS =  $(DEBUG_FFLAGS)
 
 # run ulimit -c unlimited
 

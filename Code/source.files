@@ -4,6 +4,7 @@ MODULES = \
 	m_costf.F90\
 	m_cov.F90\
 	m_cyyreg.F90\
+	m_enstein.F90\
 	m_es.F90\
 	m_esmda.F90\
 	m_func.F90\

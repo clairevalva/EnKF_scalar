@@ -14,19 +14,17 @@ implicit none
 logical, save :: lsies         ! Run SIES or not
 integer, save :: maxsiesit     ! Maximum number of iterations
 real,    save :: gamma_sies    ! steplength
+integer, parameter :: nrobs=1
+integer, parameter :: ndim=1
 
 contains 
-   subroutine sies(samples,xf,qf,nrsamp,esamp,cdd,dpert,nrobs,ndim)
-
-   real,    intent(out) :: samples(nrsamp,2) ! Returns posterior samples
+   subroutine sies(samples,xf,qf,nrsamp,esamp,dpert)
    integer, intent(in)  :: nrsamp            ! Number of samples
    integer, intent(in)  :: esamp             ! Number of samples nrsamp=10^esamp for plotting
    real,    intent(in)  :: xf(nrsamp)        ! Prior samples of x
    real,    intent(in)  :: qf(nrsamp)        ! Prior samples of q
    real,    intent(in)  :: dpert(nrsamp)     ! The perturbed measurement ensemble
-   integer, intent(in)  :: nrobs             ! Number of observations
-   integer, intent(in)  :: ndim              ! Number of observations
-   real,    intent(in)  :: cdd
+   real,    intent(out) :: samples(nrsamp,2) ! Returns posterior samples
 
    real, allocatable :: xsamp(:)
    real, allocatable :: qsamp(:)
@@ -90,7 +88,9 @@ contains
    allocate(xx(nrsamp),bb(nrsamp), xxold(nrsamp))
    allocate (ipiv(nrsamp))
 
-   write(*,'(a,2f13.5)',advance='yes')'SIES analysis...d,sigo=',d,sigo
+   write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
+   write(*,'(a)')'SIES analysis...'
+
    do n=1,nrsamp
       Dens(1,n)=dpert(n)
       E0(1,n)=xf(n)
@@ -133,8 +133,7 @@ contains
 !      print '("Time = ",g13.5," seconds.")',finish-start
 
    do i=1,maxsiesit
-      print *,' '
-      print '(a,i3)','Iteration: ',i
+!      print '(a,i3)','Iteration: ',i
       YY(1,:)=(Yi(1,:) - sum(Yi(1,1:nrsamp))/real(nrsamp)) / n1
 
       if (ndim < nrsamp-1 .and. beta /= 0.0 .and. lcyyreg) then
@@ -158,11 +157,11 @@ contains
 !            do k=1,ndim
 !               Ai(k,:)=( Ei(k,:) - sum(Ei(k,1:nrsamp))/real(nrsamp) )/n1
 !            enddo
+!
 !            call pseudoinv(Ai,Ainv,ndim,nrsamp,truncation)
 !            call dgemm('N','N',1,ndim,nrsamp,1.0,YY,1,Ainv,nrsamp,0.0,YAinv,1)
 !            call dgemm('N','N',1,nrsamp,ndim,1.0,YAinv,1,A0,ndim,0.0,S,1)
 !            print '(a,10g16.8)','S = YY * Ai^+ * A0     =',S(1,1:10)
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !    Computing S= Yi * (Ai^+ * Ai) Omega_i^+  
          do n=1,nrsamp
@@ -184,7 +183,6 @@ contains
             S(m,:)=xx(:)
          enddo
 
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !    Standard LU with multiple rhs
 !           call cpu_time(start)
@@ -201,7 +199,6 @@ contains
 !           print '("Time = ",f6.3," seconds.")',finish-start
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-         print '(a,10g16.8)','S = Yi * Omega_i^+     =',S(1,1:10)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          H(1,:)=Dens(1,:) - Yi(1,:)             
@@ -231,13 +228,9 @@ contains
          if (ndim>1) Yi(1,n)=Yi(1,n)+Ei(2,n)
       enddo
 
-      samples(:,1)=Ei(1,:)
-      if (ndim > 1) samples(:,2)=Ei(2,:)
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !    Convergence test
       diffW=maxval(abs(W-WW))
-      print '(a,g13.5,a,g13.5)','Diff 1=',diffW
 
 ! dumping iterations
       call getcaseid(caseid,'SIES',-1.0,-1,esamp,sigw,i)
@@ -250,12 +243,12 @@ contains
 
    enddo
 
-!    End of iteration loop
+
    samples(:,1)=Ei(1,:)
    if (ndim > 1) samples(:,2)=Ei(2,:)
 
 
-!    Recomputing ysamp with some noise for nicer plotting
+!  Recomputing ysamp with some noise for nicer plotting
    if (sigw < sigq) then
       do n=1,nrsamp
          ysamp(n)=ysamp(n)+sigq*normal()
@@ -265,11 +258,14 @@ contains
    call tecmargpdf('x',Ei(1,1:nrsamp),nrsamp,caseid,xa,xb,nx)
    if (ndim > 1) call tecmargpdf('q',Ei(2,1:nrsamp),nrsamp,caseid,qa,qb,nx)
    call tecmargpdf('y',Yi(1,1:nrsamp),nrsamp,caseid,ya,yb,ny)
-   write(*,'(a)')'SIES analysis completed'
 
    deallocate(xsamp,ysamp,qsamp,iconv)
    deallocate(W, WW, Omega, Yi, YY, YAinv, S, YT,ST,STO, Dens, H, E0, Ei, A0)
    deallocate(Ai, Ainv, A0inv, aveW, xx,bb, xxold, ipiv) 
+
+   write(*,'(a)')'SIES analysis completed'
+   write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
+   write(*,'(a)')
 
 end subroutine
 end module

@@ -10,14 +10,13 @@ use m_tecmargpdf
 use m_tecpdf
 implicit none
 contains
-subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp, cdd)
+subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp)
    integer, intent(in)  :: nrsamp
    integer, intent(in)  :: esamp
    real,    intent(out) :: samples(nrsamp,2)
    real,    intent(in)  :: xsampini(nrsamp) 
    real,    intent(in)  :: qsampini(nrsamp) 
    real,    intent(in)  :: dpert(nrsamp) 
-   real,    intent(in) :: cdd
 
    real, allocatable :: xsamp(:)
    real, allocatable :: qsamp(:)
@@ -56,7 +55,6 @@ subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp, cdd)
 !      endif
 
    enddo
-   write(*,'(a,10g11.3)')'Es',xsamp(1:10)
 
    if (sigw < sigq) then
       do i=1,nrsamp
@@ -68,9 +66,12 @@ subroutine es(samples,xsampini,qsampini,dpert,nrsamp,esamp, cdd)
    call tecmargpdf('x',xsamp,nrsamp,caseid,xa,xb,nx)
    call tecmargpdf('y',ysamp,nrsamp,caseid,ya,yb,ny)
    call tecmargpdf('q',qsamp,nrsamp,caseid,qa,qb,nx)
-   write(*,'(a)')'ES analysis completed'
 
    samples(:,1)=xsamp(:)
    samples(:,2)=qsamp(:)
+   deallocate(xsamp,ysamp,qsamp)
+   write(*,'(a)')'ES analysis completed'
+   write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
+   write(*,'(a)')
 end subroutine
 end module

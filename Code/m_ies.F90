@@ -13,18 +13,16 @@ implicit none
 logical, save :: lies        ! Run IES or not
 integer, save :: maxiesit    ! maximumn number of iterations
 real,    save :: gamma_ies   ! step length used in IES
-real,    save :: IESv        ! step length used in IES
+integer, save :: IESv        ! step length used in IES
 
 contains 
-   subroutine ies(samples,xf,qf,nrsamp,esamp,cdd,dpert)
-   real,    intent(out) :: samples(nrsamp,2) ! Returns posterior samples
-
+   subroutine ies(samples,xf,qf,nrsamp,esamp,dpert)
    integer, intent(in)  :: nrsamp            ! Number of samples
    integer, intent(in)  :: esamp             ! Number of samples nrsamp=10^esamp for plotting
+   real,    intent(out) :: samples(nrsamp,2) ! Returns posterior samples
    real,    intent(in)  :: xf(nrsamp)        ! Prior samples of x
    real,    intent(in)  :: qf(nrsamp)        ! Prior samples of q
    real,    intent(in)  :: dpert(nrsamp)     ! The perturbed measurement ensemble
-   real,    intent(in)  :: cdd
 
    real, allocatable :: xsamp(:)
    real, allocatable :: qsamp(:)
@@ -144,6 +142,7 @@ contains
          enddo
       else
          print *,'No matching options for IESv (1,3):',IESv
+         stop
       endif
 
 
@@ -183,7 +182,11 @@ contains
    call tecmargpdf('y',ysamp,nrsamp,caseid,ya,yb,ny)
    call tecmargpdf('q',qsamp,nrsamp,caseid,qa,qb,nx)
    call tecpdf(x,y,nx,ny,xsamp,ysamp,nrsamp,xa,ya,dx,dy,caseid)
-   write(*,'(a)')'IES analysis completed'
+
    deallocate(xsamp,ysamp,qsamp,iconv)
+   write(*,'(a)')'IES analysis completed'
+   write(*,'(a)')'++++++++++++++++++++++++++++++++++++++++++++++'
+   write(*,'(a)')
+
 end subroutine
 end module
