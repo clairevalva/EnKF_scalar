@@ -15,7 +15,7 @@ logical, save :: lsies         ! Run SIES or not
 integer, save :: maxsiesit     ! Maximum number of iterations
 real,    save :: gamma_sies    ! steplength
 integer, parameter :: nrobs=1
-integer, parameter :: ndim=1
+integer, parameter :: ndim=2
 
 contains 
    subroutine sies(samples,xf,qf,nrsamp,esamp,dpert)
